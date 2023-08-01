@@ -258,4 +258,148 @@ function forward(transformer, token, pos)
     end
 end
 
+-- multihead attention
 
+for h = 1, p.n_heads do
+    -- get the query vector for this head
+    local q = s.q[h * head_size]
+
+    -- attention scores for this head
+    local att = s.att[h * p.seq_len]
+    -- iterate over all timesteps (including current one)
+    for t=1, pos do
+        local k = s.key_cache[loff + t * kv_dim + (h / kv_mul) * head_size]
+        -- calculate the attention score as the dot product of q and k
+        local score = 0.0
+        for i = 1, head_size do
+            score = score + q[i] * k[i]
+        end
+        score = score / math.sqrt(head_size)
+        -- save the score to the attention buffer
+        att[t] = score
+    end
+
+    -- softmax the scores to get attention weights
+
+    softmax(att, pos + 1)
+
+    -- weighted sum of the values, store back into xb
+    local xb = s.xb[h * head_size]
+    for i = 1, head_size do
+        xb[i] = 0
+    end 
+    for t =1, pos do
+        -- get the value vector for this head and at this timestep
+        local v = s.value_cache[loff + t * kv_dim + (h / kv_mul) * head_size]
+        -- get the attention weight for this timestep
+        local a = att[t]
+        -- accumulate the weighted value into xb
+        for i = 1, head_size do
+            xb[i] = xb[i] + a * v[i]
+        end
+    end
+end
+
+-- final matmul to get the output of the attention
+
+matmul(s.xb2, s.xb, w.wo[1], dim, dim)
+
+-- residual connection back into x
+for i = 1, dim do
+    x[i] = x[i] + s.xb2[i]
+end
+
+-- ffn rmsnorm
+rmsnorm(s.xb, x w.rms_ffn_weight[1], dim)
+
+-- for FFN in PyTorch we have: self.w2(F.silu(self.w1(x)) * self.w3(x))
+-- calculate self.w1(x) and self.w3(x)
+matmul(s.hb, s.xb, w.1[l], dim, hidden_dim)
+matmul(s.hb2, s.xb, w.w3[l], dim, hidden_dim)
+-- SwiGLU non-linearity
+for i = 1, hidden_dim do
+    local val = s.hb[i]
+    -- silu(x)=x*σ(x), where σ(x) is the logistic sigmoid
+    val = val * (1.0 / (1.0 + math.exp(-val)))
+    -- elementwise multiply with w3(x)
+    val = val * s.hb2[i]
+    s.hb[i] = val
+end
+-- final matmul to get the output of the ffn
+matmul(s.xb, s.hb, w.w2[l], hidden_dim, dim)
+
+-- residual connection
+for i = 1, dim do
+    x[i] = x[i] + s.xb[i]
+end
+-- final rmsnorm
+rmsnorm(x, x, w.rms_final_weight, dim)
+
+-- classifier into logits
+matmul(s.logits, x, w.wcls, p.dim, p.vocab_size)
+return s.logits
+
+-- The Byte Pair Encoding (BPE) Tokenizer that translates strings <-> tokens
+
+TokenIndex = {
+    str = nil,
+    id = nil
+}
+
+Tokenizer = {
+    vocab = nil,
+    vocab_scores = nil,
+    sorted_vocab = nil,
+    vocab_size = nil,
+    max_token_length = nil,
+    byte_pieces = nil -- stores all single-byte strings
+
+}
+
+function compare_tokens(a ,b)
+    return a.str < b.str
+end
+
+function build_tokenizer(t, tokenizer_path, vocab_size)
+    t.vocab_size = vocab_size-- malloc space to hold the scores and the strings
+    t.vocab = {} -- vocab_size * sizeof(float)
+    t.sorted_vocab = nil
+    for i = 0, 255 do
+        t.byte_pieces[i * 2] = string.char(i)
+        t.byte_pieces[i * 2 + 1] = '\0'
+    end
+
+    -- read in the file
+    local file = io.open(tokenizer-path, "rb")
+    if not file then
+        print("could not load" .. tokenizer_path)
+        os.exit()
+    end
+    -- read in the config header
+    t.max_token_length = file:read("*n")
+    for i = 1, vocab_size do
+        t.vocab_scores[i] = file:read("*n")
+        local len = file:read("*n")
+        t.vocab[i] = file:read(len)
+    end
+    file:close()
+end
+
+function free_tokenizer(t)
+    t.vocab = nil
+    t.vocab_scores = nil
+    t.sorted_vocab = nil
+end
+
+function decode(t, prev_token, token)
+    local piece = t.vocab[token]
+    -- following BOS (1) token, sesntencepiece decoder strips any leading whitespace 
+    if prev_token == 1 and piece:sub(1,1) == '' then piece = piece:sub(2)
+end
+
+    local byte_val = piece:match("<0x(%02hhX)>")
+    if byte_val then
+        piece = t.byte_pieces[tonumber(byte_val, 16) * 2]
+    end 
+    return piece
+end
