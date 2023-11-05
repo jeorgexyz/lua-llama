@@ -1,4 +1,7 @@
 # Lua Llama
-<img align="center" alt="Lua Llama" width="50px" src="./assets/lua_llama.jpg" />
+<p align="center">
+  <img width="200px" src="./assets/lua_llama.jpg" alt="Lua Llama">
+</p>
+
 
 A Lua port of llama2.c
