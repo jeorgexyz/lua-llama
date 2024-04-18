@@ -141,17 +141,26 @@ function read_checkpoint(checkpoint, config, weights)
     memory_map_weights(weights, config, weights_ptr, shared_weights)
 end
 
+
+local ffi = require("ffi")
+
+-- C declaration for munmap:
+ffi.cdef[[
+  int munmap(void *addr, size_t length);
+]]
+
+-- Assume an OS where libc is available:
+ffi.C.munmap(t.data, t.file_size) 
 function build_transformer(t, checkpoint_path)
-    -- read in the Config and the Weights from the checkpoint
     read_checkpoint(checkpoint_path, t.config, t.weights)
-    -- allocate the RunState buffers
     malloc_run_state(t.state, t.config)
 end
 
 function free_transformer(t)
-    -- close the memory mapping
-    if t.data then munmap(t.data, t.file_size) end -- munmap is not a built-in function in Lua. You would need to use a library or write your own function.
-    -- free the RunState buffers
+    if t.data then 
+        ffi.C.munmap(t.data, t.file_size) 
+        t.data = nil  
+    end 
     free_run_state(t.state)
 end
 
@@ -902,6 +911,7 @@ else
     print("unknown mode: " .. mode)
     error_usage()
 end
+
 -- memory and file handles cleanup
 sampler:free()
 tokenizer:free()
