@@ -3,10 +3,10 @@ import torch
 import time
 from pathlib import Path
 import json 
-from sentencepiece import SentencePieceProcessor
+from sentencepiece import SentencePieceProcessor # type: ignore
 from tqdm import tqdm
 
-from model import ModelArgs, Tranformer
+from model import ModelArgs, Tranformer # type: ignore
 
 class LLaMA:
 
