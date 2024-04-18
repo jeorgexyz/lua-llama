@@ -2,8 +2,14 @@
 <p align="center">
   <img width="350px" src="./assets/lua-llama.png" alt="Lua Llama">
 </p>
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Build Status (GitHub Actions)](https://img.shields.io/github/workflow/status/user/repo/workflow-name)](https://github.com/user/repo/actions)
+
+<a href="https://opensource.org/licenses/MIT">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT">
+</a>
+
+<a href="https://github.com/user/repo/actions">
+  <img src="https://img.shields.io/github/workflow/status/user/repo/workflow-name" alt="Build Status (GitHub Actions)">
+</a>
 
 
 A Lua port of Andrej Karpathy's llama2.c 
