@@ -176,7 +176,7 @@ class Transformer(nn.Module):
 
         self.layers = nn.ModuleList()
         for _ in range(args.n_layers):
-            self.layers.append(EncoderBlock(args)) #Building out the encoder
+            self.layers.append(EncoderBlock(args)) #Build out the encoder
 
         self.norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.output = nn.Linear(args.dim, self.vocab_size, bias=False)
