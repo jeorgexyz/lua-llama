@@ -56,7 +56,7 @@ RunState = {
 Transformer = {
     config = Config, -- the hyperparameters of the architecture (the blueprint)
     weights = TransformerWeights, -- the weights of the model
-    state = RunState -- buffers for the "wave" of activations in the forward pass
+    state = RunState, -- buffers for the "wave" of activations in the forward pass
     -- some more state needed to properly clean up the memory mapping (sigh)
     fd = nil, -- file descriptor for memory mapping
     data = nil, -- memory mapped data pointer
@@ -101,7 +101,7 @@ function memory_map_weights(w, p, ptr, shared_weights)
     w.token_embedding_table = ptr
     ptr = ptr + p.vocab_size * p.dim
     w.rms_att_weight = ptr
-    ptr. = ptr + n_layers * p.dim
+    ptr = ptr + n_layers * p.dim
     w.wq = ptr
     ptr = ptr + n_layers * p.dim * (p.n_heads * head_size)
     w.wk = ptr
@@ -164,7 +164,7 @@ function free_transformer(t)
     free_run_state(t.state)
 end
 
--- neutral net blocks
+-- neural net blocks
 
 function rmsnorm(o, x, weight, size)
     -- calculates sum of squares
@@ -317,11 +317,11 @@ for i = 1, dim do
 end
 
 -- ffn rmsnorm
-rmsnorm(s.xb, x w.rms_ffn_weight[1], dim)
+rmsnorm(s.xb, x, w.rms_ffn_weight[1], dim)
 
 -- for FFN in PyTorch we have: self.w2(F.silu(self.w1(x)) * self.w3(x))
 -- calculate self.w1(x) and self.w3(x)
-matmul(s.hb, s.xb, w.1[l], dim, hidden_dim)
+matmul(s.hb, s.xb, w["1"][l], dim, hidden_dim)
 matmul(s.hb2, s.xb, w.w3[l], dim, hidden_dim)
 -- SwiGLU non-linearity
 for i = 1, hidden_dim do
@@ -352,6 +352,7 @@ TokenIndex = {
     str = nil,
     id = nil
 }
+end 
 
 Tokenizer = {
     vocab = nil,
