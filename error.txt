@@ -1,0 +1,2 @@
+C:\Users\Jeorge D\Projects\ lua_llama>lua54.exe main.lua
+lua54. exe: main. lua: 352: <eof> expected near 'TokenIndex'

@@ -16,14 +16,15 @@ dependencies = {
    "lua >= 5.1, < 5.5",
    "torch >= 1.7.0",
    "nn >= 1.0.0",
+   "optim >= 1.0.3",
    "paths >= 0.3.0"
 }
 build = {
    type = "builtin",
    modules = {
-      ["llama.inference"] = "inference.lua",
-      ["llama.model"] = "model.lua",
+      ["llama.transformer"] = "transformer.lua",
       ["llama.tokenizer"] = "tokenizer.lua",
-      ["llama.utils"] = "utils.lua"
+      ["llama.config"] = "config.lua",
+      ["llama.main"] = "main.lua"
    }
 }
