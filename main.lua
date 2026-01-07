@@ -1,45 +1,66 @@
-local Transformer = require 'transformer'
-local Tokenizer = require 'tokenizer'
+-- main.lua - Pure Lua LLaMA (no Torch dependencies)
 
--- Load configuration
-local config = require 'config'
+print("=== Lua LLaMA - Pure Lua Implementation ===\n")
 
--- Initialize model
-local model = Transformer.new(config)
-
--- Load tokenizer
-local tokenizer = Tokenizer.new('tokenizer.bin', config.vocab_size)
-
--- Load data (you'll need to implement this function)
-local train_data, val_data = load_data('input.txt')
-
--- Training loop (simplified)
-local criterion = nn.CrossEntropyCriterion()
-local optimizer = optim.Adam(model:parameters(), {lr = 1e-3})
-
-for epoch = 1, config.num_epochs do
-    for _, batch in ipairs(train_data) do
-        local input, target = batch[1], batch[2]
-        
-        -- Forward pass
-        local logits = model:forward(input)
-        local loss = criterion:forward(logits, target)
-        
-        -- Backward pass
-        model:zeroGradParameters()
-        local gradients = criterion:backward(logits, target)
-        model:backward(input, gradients)
-        
-        -- Update parameters
-        optimizer:step()
-    end
-    
-    -- Validation (implement this)
-    local val_loss = evaluate(model, val_data)
-    print(string.format("Epoch %d: Validation Loss: %.4f", epoch, val_loss))
+-- Check Lua version
+if not string.unpack then
+    print("ERROR: Requires Lua 5.3+ for string.unpack")
+    print("Please install Lua 5.3 or higher, or use LuaJIT")
+    os.exit(1)
 end
 
--- Generate some text
-local prompt = tokenizer:encode("Once upon a time")
-local generated = model:generate(prompt, 100)
-print(tokenizer:decode(generated))
+-- Parse command line arguments
+local checkpoint_path = arg[1] or "stories15M.bin"
+local tokenizer_path = arg[2] or "tokenizer.bin"
+local prompt = arg[3] or "Once upon a time"
+local max_tokens = tonumber(arg[4]) or 100
+local temperature = tonumber(arg[5]) or 0.9
+
+print("Configuration:")
+print("  Checkpoint: " .. checkpoint_path)
+print("  Tokenizer:  " .. tokenizer_path)
+print("  Prompt:     " .. prompt)
+print("  Max tokens: " .. max_tokens)
+print("  Temperature:" .. temperature)
+print("")
+
+-- Initialize random seed
+math.randomseed(os.time())
+
+-- Load modules
+local Model = require('model')
+local Tokenizer = require('tokenizer')
+local gen = require('generate')
+
+-- Load model
+print("Loading model...")
+local success, model = pcall(Model.new, checkpoint_path)
+if not success then
+    print("ERROR loading model: " .. tostring(model))
+    print("\nTo download the model (60MB):")
+    print("  wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin")
+    os.exit(1)
+end
+
+-- Load tokenizer
+print("Loading tokenizer...")
+local success, tokenizer = pcall(Tokenizer.new, tokenizer_path, model.config.vocab_size)
+if not success then
+    print("ERROR loading tokenizer: " .. tostring(tokenizer))
+    print("\nTo download the tokenizer (500KB):")
+    print("  wget https://github.com/karpathy/llama2.c/raw/master/tokenizer.bin")
+    os.exit(1)
+end
+
+print("\n" .. string.rep("=", 60))
+print("Ready! Generating text...")
+print(string.rep("=", 60) .. "\n")
+
+-- Generate
+local start_time = os.clock()
+gen.generate(model, tokenizer, prompt, max_tokens, temperature)
+local end_time = os.clock()
+
+print(string.rep("=", 60))
+print(string.format("Generated in %.2f seconds", end_time - start_time))
+print(string.rep("=", 60))
