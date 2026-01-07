@@ -1,7 +1,9 @@
 # Lua LlaMA
 
-[![Lua Llama](https://github.com/jeorgexyz/lua-llama/raw/main/assets/lua-llama.png)](https://github.com/jeorgexyz/lua-llama/blob/main/assets/lua-llama.png)
-
+<p align="center">
+  <img width="350px" src="./assets/lua-llama.png" alt="Lua Llama">
+  </p>
+  
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 A Lua port of Andrej Karpathy's llama2.c
