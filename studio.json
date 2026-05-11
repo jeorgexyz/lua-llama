@@ -1,0 +1,170 @@
+{
+  "version": "1.0",
+  "identity": {
+    "id": "lua-llama",
+    "title": "Lua Llama",
+    "kind": "From Scratch",
+    "maturity": "Runnable",
+    "summary": "Pure Lua 5.3+ implementation of LLaMA-style transformer inference that runs CPU-only generation from binary model and tokenizer checkpoints.",
+    "subtitle": "LLaMA inference from scratch in pure Lua"
+  },
+  "repo": {
+    "provider": "github",
+    "slug": "jeorgexyz/lua-llama",
+    "defaultBranch": "main",
+    "manifestPath": "studio.json"
+  },
+  "visibility": "public",
+  "taxonomy": {
+    "domain": "from-scratch",
+    "section": "systems-and-languages",
+    "tags": ["Lua", "Transformer", "Inference", "LLM", "From Scratch", "CPU-only", "LLaMA"],
+    "archiveStatus": "current"
+  },
+  "presentation": {
+    "stack": ["Lua 5.3+", "Transformer Inference", "Tokenization", "CPU-only", "Binary Checkpoint Loading"],
+    "architecture": [
+      "CLI entry point parses args and orchestrates model + tokenizer loading",
+      "Binary model checkpoint parsed into weight tensors and config struct",
+      "Tokenizer loaded from binary file with encode/decode support",
+      "Forward pass runs full transformer layers with attention and feed-forward blocks",
+      "KV-cache maintained across autoregressive decoding steps",
+      "Token sampling with configurable temperature drives generation loop"
+    ],
+    "artifacts": [
+      "CLI entry point",
+      "Model loading logic",
+      "Generation runtime",
+      "Tokenizer implementation",
+      "Utility library",
+      "Sampler",
+      "Transformer block",
+      "Config module"
+    ]
+  },
+  "dossier": {
+    "pipeline": [
+      "CLI Prompt Input",
+      "Checkpoint + Tokenizer Load",
+      "Token Encode",
+      "Forward Pass",
+      "KV Cache Update",
+      "Token Sampling",
+      "Token Decode + Output"
+    ],
+    "sampleCode": {
+      "path": "generate.lua",
+      "language": "lua"
+    },
+    "snippets": [
+      {
+        "label": "CLI Entry",
+        "path": "main.lua",
+        "language": "lua",
+        "summary": "Parses CLI args (model path, tokenizer path, prompt, max_tokens, temperature) and drives the full generation pipeline."
+      },
+      {
+        "label": "Model Loading",
+        "path": "model.lua",
+        "language": "lua",
+        "summary": "Reads binary checkpoint files, parses the config header, and loads all transformer weight tensors into Lua tables."
+      },
+      {
+        "label": "Generation Loop",
+        "path": "generate.lua",
+        "language": "lua",
+        "summary": "Runs the autoregressive decode loop: forward pass, KV-cache update, and temperature-controlled token sampling."
+      },
+      {
+        "label": "Tokenizer",
+        "path": "tokenizer.lua",
+        "language": "lua",
+        "summary": "Loads vocabulary and merge rules from a binary tokenizer file, with encode and decode methods for prompt/output handling."
+      },
+      {
+        "label": "Transformer Block",
+        "path": "transformer.lua",
+        "language": "lua",
+        "summary": "Implements the core transformer layer: RMS norm, multi-head self-attention, rotary embeddings, and feed-forward network."
+      }
+    ],
+    "notes": [
+      "Educational runtime only — not a production inference service; no BLAS, SIMD, or batching.",
+      "Requires Lua 5.3+ for string.unpack; tested against Lua 5.4 and compatible with stories15M.bin from karpathy/llama2.c.",
+      "All computation is CPU-only and driven entirely from Lua with no C extensions or FFI.",
+      "Model and tokenizer are loaded from raw binary files; weights are stored as plain Lua tables of floats.",
+      "Studio should present this primarily as Source + Notes; no live runtime surface unless a web wrapper is added."
+    ]
+  },
+  "documents": {
+    "readme": {
+      "path": "README.md",
+      "language": "markdown"
+    }
+  },
+  "artifacts": [
+    { "label": "CLI entry point", "path": "main.lua" },
+    { "label": "Model loading logic", "path": "model.lua" },
+    { "label": "Generation runtime", "path": "generate.lua" },
+    { "label": "Tokenizer implementation", "path": "tokenizer.lua" },
+    { "label": "Transformer block", "path": "transformer.lua" },
+    { "label": "Token sampler", "path": "sampler.lua" },
+    { "label": "Binary IO utilities", "path": "utils.lua" },
+    { "label": "Configuration module", "path": "config.lua" }
+  ],
+  "links": [
+    {
+      "label": "GitHub Repository",
+      "url": "https://github.com/jeorgexyz/lua-llama"
+    },
+    {
+      "label": "Compatible model checkpoint (stories15M.bin)",
+      "url": "https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin"
+    },
+    {
+      "label": "Compatible tokenizer (tokenizer.bin)",
+      "url": "https://github.com/karpathy/llama2.c/raw/master/tokenizer.bin"
+    }
+  ],
+  "workbench": {
+    "primaryLabel": "Open source workbench",
+    "surfaces": [
+      {
+        "id": "lua-llama-source",
+        "label": "Source",
+        "type": "monaco",
+        "summary": "Repo-backed source reader for the Lua inference runtime.",
+        "source": {
+          "path": "main.lua",
+          "language": "lua"
+        },
+        "controls": ["switch file", "inspect snippet", "open repo", "compare modules"],
+        "metrics": ["Lua 5.3+", "CPU-only", "repo-backed"]
+      },
+      {
+        "id": "lua-llama-notes",
+        "label": "Notes",
+        "type": "document",
+        "summary": "README-backed usage guide, project structure, and setup instructions.",
+        "source": {
+          "path": "README.md",
+          "language": "markdown"
+        },
+        "controls": ["read overview", "usage", "project structure", "open repo"],
+        "metrics": ["README", "usage docs", "public repo"]
+      }
+    ],
+    "runtimePanels": [
+      {
+        "title": "Runtime Profile",
+        "lines": [
+          "execution: cpu-only",
+          "runtime: lua 5.3+",
+          "inputs: model.bin + tokenizer.bin",
+          "mode: cli generation",
+          "entry: lua54 main.lua <model.bin> <tokenizer.bin> \"<prompt>\" <max_tokens> <temperature>"
+        ]
+      }
+    ]
+  }
+}
