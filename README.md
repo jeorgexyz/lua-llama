@@ -74,6 +74,31 @@ Greedy decoding is deterministic, so this output is reproducible — and it matc
 what `llama2.c` produces from the same checkpoint and prompt, which is how the
 implementation is verified. Throughput is roughly **3–4 tokens/sec** on CPU in pure
 Lua; the goal is a readable reference implementation, not speed.
+## Speculative Decoding
+
+A small draft model proposes several tokens; the large target model verifies them all
+in one round and accepts the longest prefix it agrees with. The emitted text is
+identical to running the target alone — only the number of target invocations changes.
+
+```bash
+lua54 main_speculative.lua <target.bin> <draft.bin> tokenizer.bin "<prompt>" <max_tokens> <temperature> [lookahead]
+```
+
+A 15M draft proposing for a 42M target accepts 82% of its proposals, so each target
+round yields 4.29 tokens instead of one:
+
+```
+Draft proposals:     46 accepted / 56 proposed (82.1%)
+Target rounds:       14 (vs 60 for one-token-at-a-time)
+Tokens per round:    4.29
+```
+
+Passing the same checkpoint as both target and draft is the correctness check —
+acceptance is then exactly 100%. Note that wall-clock time does **not** improve in
+pure Lua: the speedup requires evaluating a round's positions as one batched matmul,
+which needs BLAS. `target rounds` is the metric that transfers to a real runtime.
+See [`examples/`](examples/) for full transcripts and the reasoning.
+
 ## Project Structure
 
 ```
@@ -82,6 +107,7 @@ lua-llama/
 ├── model.lua       # Model loading and weight parsing
 ├── tokenizer.lua   # Tokenizer loading and encode/decode
 ├── generate.lua    # Forward pass, KV cache, sampling
+├── speculative.lua # Speculative decoding: draft proposes, target verifies
 ├── utils.lua       # Binary IO and math utilities
 ```
 
