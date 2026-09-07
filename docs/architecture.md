@@ -12,16 +12,10 @@ lua-llama/
 ├── model.lua         # Binary checkpoint loading and weight storage
 ├── tokenizer.lua     # BPE tokenizer: loads vocab, encodes, decodes
 ├── generate.lua      # Forward pass, KV cache, RoPE, SwiGLU, autoregressive loop
-├── transformer.lua   # Alternative Torch-based sketch (not used by main.lua)
-├── sampler.lua       # Sampling strategies (temperature, top-p, greedy)
-├── config.lua        # Default hyperparameter configuration
-├── configurator.lua  # Config override/merge helper
 └── utils.lua         # Binary I/O helpers, matmul, rmsnorm, softmax, argmax
 ```
 
-The primary inference path runs through `main.lua → model.lua → tokenizer.lua → generate.lua`, with `utils.lua` providing the math primitives used throughout.
-
-`transformer.lua` is an earlier Torch-based sketch that uses `nn.LookupTable`, `nn.LayerNorm`, and `nn.Sequential`. It is not invoked by `main.lua` and lives in the repo as a reference implementation.
+The primary inference path runs through `main.lua → model.lua → tokenizer.lua → generate.lua`, with `utils.lua` providing the math primitives used throughout. These five files are the whole program; there are no other modules and no external dependencies.
 
 ---
 
@@ -217,27 +211,3 @@ All numerical operations called from `generate.lua` live here:
 All math is done in pure Lua with no external libraries.
 
 ---
-
-## Configuration (`config.lua`, `configurator.lua`)
-
-`config.lua` holds default generation hyperparameters (temperature, max tokens, etc.). `configurator.lua` provides a simple merge utility so command-line arguments or external callers can override defaults without touching the defaults table directly.
-
----
-
-## Key Design Decisions
-
-**No tensor library.** All weight matrices and activation buffers are plain Lua tables of floats. `matmul` and other operations loop in Lua. This is intentionally slow but maximally transparent.
-
-**Flat KV cache.** Rather than nested tables (`cache[layer][pos][dim]`), the KV cache is a single flat table with manual index arithmetic. This mirrors how C implementations lay out memory and is easier to reason about when reading the code.
-
-**On-the-fly RoPE.** The checkpoint file includes precomputed frequency tables, but they are skipped on load. Frequencies are recomputed each forward pass (`1 / 10000^(2i/dim)`), trading a tiny amount of compute for simplicity.
-
-**GQA/MQA via head mapping.** Grouped Query Attention is supported naturally: the query-to-KV-head mapping `floor(h * n_kv_heads / n_heads)` collapses to standard MHA when `n_kv_heads == n_heads` and to MQA when `n_kv_heads == 1`.
-
-**Shared classifier.** When `vocab_size` is negative in the checkpoint header, the embedding table doubles as the output classifier (`wcls = nil`, use `token_embedding_table`). This halves memory for the output projection with no code branching at inference time.
-
----
-
-## Relation to llama2.c
-
-This project is a direct Lua port of Andrej Karpathy's [llama2.c](https://github.com/karpathy/llama2.c). The binary checkpoint format, weight layout, RoPE implementation, and KV cache indexing are all compatible. The `stories15M.bin` and `tokenizer.bin` files included in the repo are the same files used by llama2.c.
