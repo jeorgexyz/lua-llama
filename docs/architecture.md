@@ -12,16 +12,10 @@ lua-llama/
 ├── model.lua         # Binary checkpoint loading and weight storage
 ├── tokenizer.lua     # BPE tokenizer: loads vocab, encodes, decodes
 ├── generate.lua      # Forward pass, KV cache, RoPE, SwiGLU, autoregressive loop
-├── transformer.lua   # Alternative Torch-based sketch (not used by main.lua)
-├── sampler.lua       # Sampling strategies (temperature, top-p, greedy)
-├── config.lua        # Default hyperparameter configuration
-├── configurator.lua  # Config override/merge helper
 └── utils.lua         # Binary I/O helpers, matmul, rmsnorm, softmax, argmax
 ```
 
-The primary inference path runs through `main.lua → model.lua → tokenizer.lua → generate.lua`, with `utils.lua` providing the math primitives used throughout.
-
-`transformer.lua` is an earlier Torch-based sketch that uses `nn.LookupTable`, `nn.LayerNorm`, and `nn.Sequential`. It is not invoked by `main.lua` and lives in the repo as a reference implementation.
+The primary inference path runs through `main.lua → model.lua → tokenizer.lua → generate.lua`, with `utils.lua` providing the math primitives used throughout. These five files are the whole program; there are no other modules and no external dependencies.
 
 ---
 
@@ -39,7 +33,7 @@ main.lua
            ├── prefill loop              → forward() for each prompt token
            └── autoregressive loop
                  ├── generate.forward()  → logits[vocab_size]
-                 ├── sampler             → next token id
+                 ├── sample / argmax     → next token id
                  └── tokenizer:decode()  → string fragment → stdout
 ```
 
@@ -58,21 +52,33 @@ The `.bin` checkpoint follows the llama2.c format: a 7-field int32 header follow
 | `n_layers` | Number of transformer blocks |
 | `n_heads` | Number of query heads |
 | `n_kv_heads` | Number of key/value heads (< n_heads enables GQA/MQA) |
-| `vocab_size` | Vocabulary size (negative signals shared classifier) |
+| `vocab_size` | Vocabulary size (**positive** signals a shared classifier; negative means separate `wcls` weights follow) |
 | `seq_len` | Maximum sequence length |
 
 **Derived values** computed after reading the header:
 - `head_size = dim // n_heads`
 - `kv_dim = n_kv_heads * head_size`
 
-**Weight arrays** loaded in this exact order:
+**Weight arrays** are stored *tensor-major*: each tensor holds **all layers contiguously**
+before the next tensor begins. They are not interleaved per layer. The order is:
+
 1. `token_embedding_table` — shape `(vocab_size, dim)`
-2. `rms_att_weight[l]`, `rms_ffn_weight[l]` — per-layer RMSNorm scales, shape `(dim,)`
-3. `wq[l]`, `wk[l]`, `wv[l]`, `wo[l]` — attention projection matrices per layer
-4. `w1[l]`, `w2[l]`, `w3[l]` — FFN weight matrices per layer (SwiGLU gate, down, up)
-5. `rms_final_weight` — final RMSNorm scale
-6. RoPE frequency tables (skipped; frequencies are computed on-the-fly)
-7. `wcls` — classifier head weights, only if `vocab_size` was positive (not shared)
+2. `rms_att_weight` — all layers, shape `(n_layers, dim)`
+3. `wq` — all layers, shape `(n_layers, dim, dim)`
+4. `wk` — all layers, shape `(n_layers, kv_dim, dim)`
+5. `wv` — all layers, shape `(n_layers, kv_dim, dim)`
+6. `wo` — all layers, shape `(n_layers, dim, dim)`
+7. `rms_ffn_weight` — all layers, shape `(n_layers, dim)`
+8. `w1` — all layers, shape `(n_layers, hidden_dim, dim)` (SwiGLU gate)
+9. `w2` — all layers, shape `(n_layers, dim, hidden_dim)` (down-projection)
+10. `w3` — all layers, shape `(n_layers, hidden_dim, dim)` (up-projection)
+11. `rms_final_weight` — final RMSNorm scale
+12. RoPE frequency tables (skipped; frequencies are computed on-the-fly)
+13. `wcls` — classifier head weights, present only when `vocab_size` was negative
+
+Reading these interleaved per layer consumes exactly the same number of bytes and so
+fails silently, while every tensor after the embedding table lands on the wrong slice
+of the file.
 
 `Model:create_run_state()` allocates the activation buffers (`x`, `xb`, `xb2`, `hb`, `hb2`, `q`, `k`, `v`, `logits`) that `generate.lua` reuses across every forward pass.
 
@@ -82,12 +88,22 @@ The `.bin` checkpoint follows the llama2.c format: a 7-field int32 header follow
 
 Implements Byte-Pair Encoding over the `tokenizer.bin` format.
 
-**Loading:** reads `max_token_length`, then for each of `vocab_size` entries reads a float32 score, an int32 length, and the token bytes. Tokens 0–255 are always raw bytes.
+**Loading:** reads `max_token_length`, then for each of `vocab_size` entries reads a float32 score, an int32 length, and the token bytes. Ids `0`, `1`, `2` are `<unk>`, `<s>`, `</s>`; the 256 single-byte fallback tokens `<0x00>`–`<0xFF>` occupy ids **3–258**. A byte with value `b` therefore maps to token id `b + 3`, not `b`.
 
 **Encoding (`tokenizer:encode`):**
-1. Splits the input string into individual bytes (token ids 0–255).
-2. Greedily merges adjacent pairs using a prebuilt `merge_lookup` hash table (`pair_string → token_id`) for O(1) pair lookups instead of scanning the full vocabulary.
-3. At each step, picks the merge with the highest score. Repeats until no merge improves the sequence.
+1. Prepends the BOS token (id `1`) and a dummy prefix space, matching llama2.c.
+2. Walks the input one UTF-8 codepoint at a time and looks up that codepoint's *literal
+   text* in the vocabulary. If it is present, its id is used directly; if not, the
+   codepoint falls back to one token per byte at id `byte + 3`.
+3. Greedily merges adjacent pairs using a `merge_lookup` hash table
+   (`literal_text → token_id`) built over the full vocabulary, for O(1) pair lookups
+   instead of scanning it.
+4. At each step, picks the merge with the highest score. Repeats until no pair merges.
+
+The lookup is keyed on the token's literal text, so byte-fallback tokens are keyed on the
+raw byte they represent rather than on their `<0xNN>` display form. Keying on the display
+form means no pair ever matches and the encoder silently degrades to one token per
+character.
 
 **Decoding (`tokenizer:decode`):**
 - Handles `<0xNN>` hex byte escape tokens.
@@ -116,11 +132,12 @@ Copy the row `token_embedding_table[token * dim]` into `state.x`.
 - **RoPE (Rotary Position Embedding):**  
   Applied in-place to `q` and `k`. For each head and each pair of dimensions `(2i, 2i+1)`:
   ```
-  freq = 1 / 10000^(2i / dim)
+  freq = 1 / 10000^(2i / head_size)
   angle = pos * freq
   [q_2i, q_2i+1] = [q_2i·cos - q_2i+1·sin, q_2i·sin + q_2i+1·cos]
   ```
-  The frequency base uses the full embedding `dim` (not `head_size`), matching the original LLaMA formulation.
+  The exponent is normalised by `head_size`, not the full embedding `dim` — the rotation
+  is defined within each head. With `dim = 288` and `head_size = 48` the two differ by 6×.
 
 - **KV cache write:**  
   Stores `k` and `v` into flat arrays indexed as `layer * seq_len * kv_dim + pos * kv_dim`.
@@ -138,8 +155,8 @@ Copy the row `token_embedding_table[token * dim]` into `state.x`.
 
 - **SwiGLU FFN:**  
   ```
-  gate = matmul(xb, w1[l])          -- up-projection
-  up   = matmul(xb, w3[l])          -- gate projection
+  gate = matmul(xb, w1[l])          -- gate projection
+  up   = matmul(xb, w3[l])          -- up-projection
   hb   = SiLU(gate) * up            -- elementwise gated activation
   out  = matmul(hb, w2[l])          -- down-projection
   ```
@@ -160,7 +177,9 @@ Dot product of `x` against `wcls` (or `token_embedding_table` if shared) to prod
 1. Encode prompt → token array
 2. Truncate to seq_len - 1 if necessary
 3. Allocate KV cache: n_layers × seq_len × kv_dim (flat Lua table, zeroed)
-4. Prefill: run forward() for each prompt token, advancing pos
+4. Prefill: run forward() for each prompt token *except the last*, advancing pos
+   (the last prompt token seeds the decode loop; prefilling it too would forward it
+    twice, at consecutive positions)
 5. Autoregressive decode:
    a. forward(next_token, pos) → logits
    b. if temperature < 0.01: greedy argmax
@@ -192,27 +211,3 @@ All numerical operations called from `generate.lua` live here:
 All math is done in pure Lua with no external libraries.
 
 ---
-
-## Configuration (`config.lua`, `configurator.lua`)
-
-`config.lua` holds default generation hyperparameters (temperature, max tokens, etc.). `configurator.lua` provides a simple merge utility so command-line arguments or external callers can override defaults without touching the defaults table directly.
-
----
-
-## Key Design Decisions
-
-**No tensor library.** All weight matrices and activation buffers are plain Lua tables of floats. `matmul` and other operations loop in Lua. This is intentionally slow but maximally transparent.
-
-**Flat KV cache.** Rather than nested tables (`cache[layer][pos][dim]`), the KV cache is a single flat table with manual index arithmetic. This mirrors how C implementations lay out memory and is easier to reason about when reading the code.
-
-**On-the-fly RoPE.** The checkpoint file includes precomputed frequency tables, but they are skipped on load. Frequencies are recomputed each forward pass (`1 / 10000^(2i/dim)`), trading a tiny amount of compute for simplicity.
-
-**GQA/MQA via head mapping.** Grouped Query Attention is supported naturally: the query-to-KV-head mapping `floor(h * n_kv_heads / n_heads)` collapses to standard MHA when `n_kv_heads == n_heads` and to MQA when `n_kv_heads == 1`.
-
-**Shared classifier.** When `vocab_size` is negative in the checkpoint header, the embedding table doubles as the output classifier (`wcls = nil`, use `token_embedding_table`). This halves memory for the output projection with no code branching at inference time.
-
----
-
-## Relation to llama2.c
-
-This project is a direct Lua port of Andrej Karpathy's [llama2.c](https://github.com/karpathy/llama2.c). The binary checkpoint format, weight layout, RoPE implementation, and KV cache indexing are all compatible. The `stories15M.bin` and `tokenizer.bin` files included in the repo are the same files used by llama2.c.
