@@ -11,6 +11,7 @@ function Tokenizer.new(tokenizer_path, vocab_size)
     self.vocab_size = vocab_size
     self.vocab = {}
     self.vocab_scores = {}
+    self.text = {}
     
     local file = io.open(tokenizer_path, "rb")
     if not file then
@@ -34,6 +35,8 @@ function Tokenizer.new(tokenizer_path, vocab_size)
         
         self.vocab[i] = token
         self.vocab_scores[i] = score
+        local hex = token:match("^<0x(%x%x)>$")
+        self.text[i] = hex and string.char(tonumber(hex, 16)) or token
     end
     
     file:close()
@@ -45,15 +48,15 @@ function Tokenizer.new(tokenizer_path, vocab_size)
         end
     end
     
-    -- Build merge lookup map for O(1) lookup (instead of O(vocab_size))
+    -- Lookup over the FULL vocab keyed on literal token text (lowest id wins)
     self.merge_lookup = {}
-    for id = 256, vocab_size - 1 do
-        local token_str = self.vocab[id]
-        if token_str then
-            self.merge_lookup[token_str] = id
+    for id = 0, vocab_size - 1 do
+        local t = self.text[id]
+        if t and self.merge_lookup[t] == nil then
+            self.merge_lookup[t] = id
         end
     end
-    
+
     print(string.format("Loaded %d tokens (%d merges)", vocab_size, vocab_size - 256))
     return self
 end
@@ -67,53 +70,40 @@ function str_to_bytes(s)
     return bytes
 end
 
--- BPE encoding: greedily merge byte pairs
-function Tokenizer:encode(text)
-    -- Start with raw bytes
+-- BPE encoding: llama2.c-compatible (BOS + dummy prefix + byte fallback + greedy merge)
+function Tokenizer:encode(text, add_bos)
+    if add_bos == nil then add_bos = true end
     local tokens = {}
-    
-    -- Convert text to UTF-8 bytes (tokens 0-255)
-    for i = 1, #text do
-        tokens[i] = string.byte(text, i)
+    if add_bos then tokens[#tokens + 1] = 1 end
+    if text ~= "" then text = " " .. text end
+
+    local i = 1
+    while i <= #text do
+        local b = text:byte(i)
+        local n = (b < 0x80 and 1) or (b < 0xE0 and 2) or (b < 0xF0 and 3) or 4
+        local cp = text:sub(i, i + n - 1)
+        local id = self.merge_lookup[cp]
+        if id then
+            tokens[#tokens + 1] = id
+        else
+            for k = 1, #cp do tokens[#tokens + 1] = cp:byte(k) + 3 end
+        end
+        i = i + n
     end
-    
-    -- Greedily merge tokens based on vocab scores using O(1) lookup
-    while #tokens > 1 do
-        local best_score = -1e10
-        local best_id = -1
-        local best_idx = -1
-        
-        -- Find best merge using lookup map
-        for i = 1, #tokens - 1 do
-            -- Concatenate this pair
-            local pair_str = self.vocab[tokens[i]] .. self.vocab[tokens[i+1]]
-            
-            -- O(1) lookup instead of O(vocab_size) scan
-            local merge_id = self.merge_lookup[pair_str]
-            if merge_id then
-                local score = self.vocab_scores[merge_id]
-                if score > best_score then
-                    best_score = score
-                    best_id = merge_id
-                    best_idx = i
-                end
+
+    while true do
+        local best_score, best_id, best_idx = -1e10, -1, -1
+        for j = 1, #tokens - 1 do
+            local merged = self.merge_lookup[self.text[tokens[j]] .. self.text[tokens[j + 1]]]
+            if merged and self.vocab_scores[merged] > best_score then
+                best_score, best_id, best_idx = self.vocab_scores[merged], merged, j
             end
         end
-        
-        -- No more merges found
-        if best_idx == -1 then
-            break
-        end
-        
-        -- Merge the best pair efficiently (avoid table.remove)
+        if best_idx == -1 then break end
         tokens[best_idx] = best_id
-        -- Shift remaining tokens left
-        for i = best_idx + 1, #tokens - 1 do
-            tokens[i] = tokens[i + 1]
-        end
-        tokens[#tokens] = nil
+        table.remove(tokens, best_idx + 1)
     end
-    
+
     return tokens
 end
 

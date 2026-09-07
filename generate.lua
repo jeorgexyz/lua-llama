@@ -12,8 +12,8 @@ local function apply_rope(q, k, pos, n_heads, head_size, dim)
             local idx = head_offset + i
             local pair_idx = (i - 1) // 2
 
-            -- Correct frequency: base uses full embedding dim
-            local freq = 1.0 / math.pow(theta_base, (2.0 * pair_idx) / dim)
+            -- llama2.c: exponent is head_dim / head_size, per head
+            local freq = 1.0 / math.pow(theta_base, (2.0 * pair_idx) / head_size)
             local val = pos * freq
             local cos_val = math.cos(val)
             local sin_val = math.sin(val)
@@ -185,10 +185,10 @@ local function generate(model, tokenizer, prompt, max_tokens, temperature)
 
     local pos = 0
 
-    -- Process prompt (prefill)
-    for _, token in ipairs(tokens) do
+    -- Process prompt (prefill) - all but the last token, which seeds the loop
+    for i = 1, #tokens - 1 do
         if pos >= c.seq_len then break end
-        forward(model, token, pos, state, key_cache, value_cache, att_scores_buf)
+        forward(model, tokens[i], pos, state, key_cache, value_cache, att_scores_buf)
         pos = pos + 1
     end
 
