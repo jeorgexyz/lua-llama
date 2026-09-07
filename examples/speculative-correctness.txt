@@ -1,0 +1,39 @@
+=== Lua LLaMA - Speculative Decoding ===
+
+Configuration:
+  Target:      stories15M.bin
+  Draft:       stories15M.bin
+  Tokenizer:   tokenizer.bin
+  Prompt:      Once upon a time
+  Max tokens:  60
+  Temperature: 0.0
+  Lookahead:   4
+
+Loading target model...
+Loading model from: stories15M.bin
+Config: dim=288, layers=6, heads=6, kv_heads=6, vocab=32000, seq_len=256, shared_classifier=true
+Using shared classifier (token_embedding_table)
+Model loaded successfully!
+Draft and target are the same checkpoint - running the correctness check.
+Loading tokenizer...
+Loading tokenizer from: tokenizer.bin
+Loaded 32000 tokens (31744 merges)
+
+============================================================
+Ready! Generating with speculative decoding...
+============================================================
+
+Once upon a time, there was a little girl named Lily. She loved to play outside in the sunshine. One day, she saw a big, red ball in the sky. It was the sun! She thought it was so pretty.
+Lily wanted to play with the ball, but it was
+============================================================
+Emitted 60 tokens in 35.54 seconds
+Draft proposals:     48 accepted / 48 proposed (100.0%)
+Target rounds:       12 (vs 60 for one-token-at-a-time)
+Tokens per round:    5.00
+Forward passes:      60 target, 60 draft
+============================================================
+
+Target rounds is the metric a batched runtime would convert into speed: each
+round evaluates block+1 positions in one pass over the target weights. This
+implementation runs them sequentially in pure Lua, so wall-clock time does not
+improve here - the arithmetic per position is unchanged.
