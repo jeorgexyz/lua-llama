@@ -18,11 +18,25 @@
   "taxonomy": {
     "domain": "from-scratch",
     "section": "systems-and-languages",
-    "tags": ["Lua", "Transformer", "Inference", "LLM", "From Scratch", "CPU-only", "LLaMA"],
+    "tags": [
+      "Lua",
+      "Transformer",
+      "Inference",
+      "LLM",
+      "From Scratch",
+      "CPU-only",
+      "LLaMA"
+    ],
     "archiveStatus": "current"
   },
   "presentation": {
-    "stack": ["Lua 5.3+", "Transformer Inference", "Tokenization", "CPU-only", "Binary Checkpoint Loading"],
+    "stack": [
+      "Lua 5.3+",
+      "Transformer Inference",
+      "Tokenization",
+      "CPU-only",
+      "Binary Checkpoint Loading"
+    ],
     "architecture": [
       "CLI entry point parses args and orchestrates model + tokenizer loading",
       "Binary model checkpoint parsed into weight tensors and config struct",
@@ -36,10 +50,8 @@
       "Model loading logic",
       "Generation runtime",
       "Tokenizer implementation",
-      "Utility library",
-      "Sampler",
-      "Transformer block",
-      "Config module"
+      "Math primitives",
+      "Captured example runs"
     ]
   },
   "dossier": {
@@ -82,35 +94,56 @@
         "summary": "Loads vocabulary and merge rules from a binary tokenizer file, with encode and decode methods for prompt/output handling."
       },
       {
-        "label": "Transformer Block",
-        "path": "transformer.lua",
+        "label": "Math Primitives",
+        "path": "utils.lua",
         "language": "lua",
-        "summary": "Implements the core transformer layer: RMS norm, multi-head self-attention, rotary embeddings, and feed-forward network."
+        "summary": "matmul, rmsnorm, softmax, argmax and little-endian binary readers - every numeric operation the forward pass uses, in plain Lua."
       }
     ],
     "notes": [
-      "Educational runtime only — not a production inference service; no BLAS, SIMD, or batching.",
+      "Educational runtime only - not a production inference service; no BLAS, SIMD, or batching.",
       "Requires Lua 5.3+ for string.unpack; tested against Lua 5.4 and compatible with stories15M.bin from karpathy/llama2.c.",
       "All computation is CPU-only and driven entirely from Lua with no C extensions or FFI.",
       "Model and tokenizer are loaded from raw binary files; weights are stored as plain Lua tables of floats.",
-      "Studio should present this primarily as Source + Notes; no live runtime surface unless a web wrapper is added."
+      "Correctness is verified by matching llama2.c token for token under greedy decoding on the same checkpoint.",
+      "Throughput is roughly 3-4 tokens/sec on CPU; readability is the design goal, not speed."
     ]
   },
   "documents": {
     "readme": {
       "path": "README.md",
       "language": "markdown"
+    },
+    "architecture": {
+      "path": "docs/architecture.md",
+      "language": "markdown"
     }
   },
   "artifacts": [
-    { "label": "CLI entry point", "path": "main.lua" },
-    { "label": "Model loading logic", "path": "model.lua" },
-    { "label": "Generation runtime", "path": "generate.lua" },
-    { "label": "Tokenizer implementation", "path": "tokenizer.lua" },
-    { "label": "Transformer block", "path": "transformer.lua" },
-    { "label": "Token sampler", "path": "sampler.lua" },
-    { "label": "Binary IO utilities", "path": "utils.lua" },
-    { "label": "Configuration module", "path": "config.lua" }
+    {
+      "label": "CLI entry point",
+      "path": "main.lua"
+    },
+    {
+      "label": "Model loading logic",
+      "path": "model.lua"
+    },
+    {
+      "label": "Generation runtime",
+      "path": "generate.lua"
+    },
+    {
+      "label": "Tokenizer implementation",
+      "path": "tokenizer.lua"
+    },
+    {
+      "label": "Binary IO and math utilities",
+      "path": "utils.lua"
+    },
+    {
+      "label": "Captured example runs",
+      "path": "examples/temperature-sweep.txt"
+    }
   ],
   "links": [
     {
@@ -138,8 +171,38 @@
           "path": "main.lua",
           "language": "lua"
         },
-        "controls": ["switch file", "inspect snippet", "open repo", "compare modules"],
-        "metrics": ["Lua 5.3+", "CPU-only", "repo-backed"]
+        "controls": [
+          "switch file",
+          "inspect snippet",
+          "open repo",
+          "compare modules"
+        ],
+        "metrics": [
+          "Lua 5.3+",
+          "CPU-only",
+          "repo-backed"
+        ]
+      },
+      {
+        "id": "lua-llama-run",
+        "label": "Run",
+        "type": "terminal",
+        "summary": "Captured CLI runs against the bundled stories15M checkpoint, including a temperature sweep at 0.0 / 0.7 / 1.0.",
+        "source": {
+          "path": "examples/temperature-sweep.txt",
+          "language": "plaintext"
+        },
+        "controls": [
+          "replay transcript",
+          "compare temperatures",
+          "open examples",
+          "run locally"
+        ],
+        "metrics": [
+          "greedy = deterministic",
+          "~3-4 tok/s",
+          "cpu-only"
+        ]
       },
       {
         "id": "lua-llama-notes",
@@ -150,8 +213,17 @@
           "path": "README.md",
           "language": "markdown"
         },
-        "controls": ["read overview", "usage", "project structure", "open repo"],
-        "metrics": ["README", "usage docs", "public repo"]
+        "controls": [
+          "read overview",
+          "usage",
+          "project structure",
+          "open repo"
+        ],
+        "metrics": [
+          "README",
+          "usage docs",
+          "public repo"
+        ]
       }
     ],
     "runtimePanels": [
@@ -162,7 +234,8 @@
           "runtime: lua 5.3+",
           "inputs: model.bin + tokenizer.bin",
           "mode: cli generation",
-          "entry: lua54 main.lua <model.bin> <tokenizer.bin> \"<prompt>\" <max_tokens> <temperature>"
+          "entry: lua54 main.lua <model.bin> <tokenizer.bin> \"<prompt>\" <max_tokens> <temperature>",
+          "verified: matches llama2.c greedy output"
         ]
       }
     ]
