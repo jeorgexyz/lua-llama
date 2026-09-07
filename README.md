@@ -16,8 +16,10 @@ Runs CPU-only inference directly from binary model and tokenizer files.
 ## Requirements
 
 - Lua **5.3+** (tested with Lua 5.4)
-- A compatible model checkpoint (`.bin`)
-- A compatible tokenizer (`.bin`)
+- A model checkpoint and tokenizer in [llama2.c](https://github.com/karpathy/llama2.c) binary format
+
+Both are already checked into this repo — `stories15M.bin` (the TinyStories 15M
+checkpoint) and `tokenizer.bin` — so it runs with no downloads.
 
 ---
 
@@ -48,6 +50,30 @@ lua54 main.lua <model.bin> <tokenizer.bin> "<prompt>" <max_tokens> <temperature>
 ```bash
 lua54 main.lua stories15M.bin tokenizer.bin "Once upon a time" 100 0.8
 ```
+
+## Example Output
+
+At temperature `0.0` (greedy, deterministic):
+
+```
+$ lua54 main.lua stories15M.bin tokenizer.bin "Once upon a time" 90 0.0
+
+Config: dim=288, layers=6, heads=6, kv_heads=6, vocab=32000, seq_len=256
+Prompt tokens: 5
+
+Once upon a time, there was a little girl named Lily. She loved to play outside
+in the sunshine. One day, she saw a big, red ball in the sky. It was the sun!
+She thought it was so pretty.
+Lily wanted to play with the ball, but it was too high up in the sky. She tried
+to jump and reach it, but she couldn't. Then, she had an idea. She would
+
+Generated in 24.54 seconds
+```
+
+Greedy decoding is deterministic, so this output is reproducible — and it matches
+what `llama2.c` produces from the same checkpoint and prompt, which is how the
+implementation is verified. Throughput is roughly **3–4 tokens/sec** on CPU in pure
+Lua; the goal is a readable reference implementation, not speed.
 ## Project Structure
 
 ```

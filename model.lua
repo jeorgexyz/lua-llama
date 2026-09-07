@@ -25,9 +25,8 @@ function Model.new(checkpoint_path)
     local seq_len = utils.read_int32(file)
     
     -- Check if classifier weights are shared (llama2.c convention: negative vocab_size means shared)
-    local shared_classifier = false
+    local shared_classifier = vocab_size > 0
     if vocab_size < 0 then
-        shared_classifier = true
         vocab_size = -vocab_size
     end
     
@@ -57,36 +56,30 @@ function Model.new(checkpoint_path)
     -- Token embedding table
     w.token_embedding_table = utils.read_float32_array(file, c.vocab_size * c.dim)
     
-    -- RMS norm weights
+    -- llama2.c stores each tensor with ALL layers contiguous, in this exact order:
+    -- rms_att, wq, wk, wv, wo, rms_ffn, w1, w2, w3
     w.rms_att_weight = {}
-    w.rms_ffn_weight = {}
-    for l = 1, c.n_layers do
-        w.rms_att_weight[l] = utils.read_float32_array(file, c.dim)
-        w.rms_ffn_weight[l] = utils.read_float32_array(file, c.dim)
-    end
-    
-    -- Attention weights (wq, wk, wv, wo) - correct shapes for llama2.c format
+    for l = 1, c.n_layers do w.rms_att_weight[l] = utils.read_float32_array(file, c.dim) end
+
     w.wq = {}
+    for l = 1, c.n_layers do w.wq[l] = utils.read_float32_array(file, c.dim * c.dim) end
     w.wk = {}
+    for l = 1, c.n_layers do w.wk[l] = utils.read_float32_array(file, c.kv_dim * c.dim) end
     w.wv = {}
+    for l = 1, c.n_layers do w.wv[l] = utils.read_float32_array(file, c.kv_dim * c.dim) end
     w.wo = {}
-    for l = 1, c.n_layers do
-        w.wq[l] = utils.read_float32_array(file, c.dim * c.dim)           -- (dim, dim)
-        w.wk[l] = utils.read_float32_array(file, c.kv_dim * c.dim)        -- (kv_dim, dim)
-        w.wv[l] = utils.read_float32_array(file, c.kv_dim * c.dim)        -- (kv_dim, dim)
-        w.wo[l] = utils.read_float32_array(file, c.dim * c.dim)           -- (dim, dim)
-    end
-    
-    -- FFN weights
+    for l = 1, c.n_layers do w.wo[l] = utils.read_float32_array(file, c.dim * c.dim) end
+
+    w.rms_ffn_weight = {}
+    for l = 1, c.n_layers do w.rms_ffn_weight[l] = utils.read_float32_array(file, c.dim) end
+
     w.w1 = {}
+    for l = 1, c.n_layers do w.w1[l] = utils.read_float32_array(file, c.hidden_dim * c.dim) end
     w.w2 = {}
+    for l = 1, c.n_layers do w.w2[l] = utils.read_float32_array(file, c.dim * c.hidden_dim) end
     w.w3 = {}
-    for l = 1, c.n_layers do
-        w.w1[l] = utils.read_float32_array(file, c.dim * c.hidden_dim)
-        w.w2[l] = utils.read_float32_array(file, c.hidden_dim * c.dim)
-        w.w3[l] = utils.read_float32_array(file, c.dim * c.hidden_dim)
-    end
-    
+    for l = 1, c.n_layers do w.w3[l] = utils.read_float32_array(file, c.hidden_dim * c.dim) end
+
     -- Final RMS norm
     w.rms_final_weight = utils.read_float32_array(file, c.dim)
     
