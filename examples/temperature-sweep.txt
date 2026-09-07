@@ -1,0 +1,46 @@
+Temperature sweep - same prompt, same checkpoint, three sampling temperatures.
+Prompt: "Once upon a time"   Tokens: 90
+
+
+================================================================
+  temperature = 0.0
+================================================================
+
+Generating...
+
+Once upon a time
+, there was a little girl named Lily. She loved to play outside in the sunshine. One day, she saw a big, red ball in the sky. It was the sun! She thought it was so pretty.
+Lily wanted to play with the ball, but it was too high up in the sky. She tried to jump and reach it, but she couldn't. Then, she had an idea. She would
+
+============================================================
+Generated in 25.03 seconds
+============================================================
+
+================================================================
+  temperature = 0.7
+================================================================
+
+Generating...
+
+Once upon a time
+, there was a little girl named Lily. She loved to play outside in the park with her friends. One day, while they were playing, Lily saw a scary monster with big teeth and long arms. She was scared, but her friends told her not to worry because the monster was far away.
+Lily decided to go to the monster and ask if it was okay. She walked up to the monster
+
+============================================================
+Generated in 24.82 seconds
+============================================================
+
+================================================================
+  temperature = 1.0
+================================================================
+
+Generating...
+
+Once upon a time
+, there was a little girl named Lily. She was very anxious because she had lost her mommy. She looked everywhere, but she couldn't find her. 
+Lily's friend, Timmy, saw her crying and asked, "Why are you sad, Lily?" 
+Lily replied, "I lost my mommy. I don't know where she is. I don't want to leave
+
+============================================================
+Generated in 24.76 seconds
+============================================================

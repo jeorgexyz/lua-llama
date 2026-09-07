@@ -1,0 +1,33 @@
+=== Lua LLaMA - Pure Lua Implementation ===
+
+Configuration:
+  Checkpoint: stories15M.bin
+  Tokenizer:  tokenizer.bin
+  Prompt:     The little robot
+  Max tokens: 90
+  Temperature:0.0
+
+Loading model...
+Loading model from: stories15M.bin
+Config: dim=288, layers=6, heads=6, kv_heads=6, vocab=32000, seq_len=256, shared_classifier=true
+Using shared classifier (token_embedding_table)
+Model loaded successfully!
+Loading tokenizer...
+Loading tokenizer from: tokenizer.bin
+Loaded 32000 tokens (31744 merges)
+
+============================================================
+Ready! Generating text...
+============================================================
+
+Prompt tokens: 4
+
+Generating...
+
+The little robot
+ was very excited. He had been waiting for a long time for a long time. He was so happy that he started to jump up and down. He wanted to go outside and play.
+The little robot ran around the house, exploring the garden. He saw a big tree and decided to climb it. He climbed higher and higher until he was at the top. He looked down and saw his mom. She was smiling and
+
+============================================================
+Generated in 24.40 seconds
+============================================================

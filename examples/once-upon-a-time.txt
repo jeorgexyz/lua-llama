@@ -1,0 +1,33 @@
+=== Lua LLaMA - Pure Lua Implementation ===
+
+Configuration:
+  Checkpoint: stories15M.bin
+  Tokenizer:  tokenizer.bin
+  Prompt:     Once upon a time
+  Max tokens: 90
+  Temperature:0.0
+
+Loading model...
+Loading model from: stories15M.bin
+Config: dim=288, layers=6, heads=6, kv_heads=6, vocab=32000, seq_len=256, shared_classifier=true
+Using shared classifier (token_embedding_table)
+Model loaded successfully!
+Loading tokenizer...
+Loading tokenizer from: tokenizer.bin
+Loaded 32000 tokens (31744 merges)
+
+============================================================
+Ready! Generating text...
+============================================================
+
+Prompt tokens: 5
+
+Generating...
+
+Once upon a time
+, there was a little girl named Lily. She loved to play outside in the sunshine. One day, she saw a big, red ball in the sky. It was the sun! She thought it was so pretty.
+Lily wanted to play with the ball, but it was too high up in the sky. She tried to jump and reach it, but she couldn't. Then, she had an idea. She would
+
+============================================================
+Generated in 24.56 seconds
+============================================================
