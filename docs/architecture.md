@@ -12,10 +12,12 @@ lua-llama/
 ├── model.lua         # Binary checkpoint loading and weight storage
 ├── tokenizer.lua     # BPE tokenizer: loads vocab, encodes, decodes
 ├── generate.lua      # Forward pass, KV cache, RoPE, SwiGLU, autoregressive loop
+├── speculative.lua   # Speculative decoding: draft proposes, target verifies
+├── main_speculative.lua  # CLI entry point for speculative decoding
 └── utils.lua         # Binary I/O helpers, matmul, rmsnorm, softmax, argmax
 ```
 
-The primary inference path runs through `main.lua → model.lua → tokenizer.lua → generate.lua`, with `utils.lua` providing the math primitives used throughout. These five files are the whole program; there are no other modules and no external dependencies.
+The primary inference path runs through `main.lua → model.lua → tokenizer.lua → generate.lua`, with `utils.lua` providing the math primitives used throughout. `main_speculative.lua → speculative.lua` is a second entry point that reuses the same model, tokenizer, and forward pass. There are no other modules and no external dependencies.
 
 ---
 
@@ -211,3 +213,63 @@ All numerical operations called from `generate.lua` live here:
 All math is done in pure Lua with no external libraries.
 
 ---
+
+---
+
+## Speculative Decoding (`speculative.lua`)
+
+A second decoding strategy layered over the same `forward()`. A small **draft** model
+proposes `k` tokens; the large **target** model then evaluates the current token plus
+all `k` proposals, and accepts the longest prefix it agrees with.
+
+### Contexts
+
+A *decode context* is a model plus its own run state and KV cache. The draft and the
+target each get one, because the draft necessarily speculates past the committed
+sequence and must be able to diverge from it.
+
+### One round
+
+```
+1. Draft proposes:   forward(current), forward(x1), ... -> x1..xk  (k draft passes)
+2. Target verifies:  forward(current), forward(x1), ..., forward(xk)
+                     -> distributions p1..p(k+1)       (k+1 target passes, one round)
+3. Accept prefix:    greedy   - accept xi while xi == argmax(pi)
+                     sampling - accept with probability min(1, pi[xi] / qi[xi])
+4. One correction:   all accepted -> bonus token from p(k+1)
+                     rejected at i -> greedy: argmax(pi)
+                                      sampling: resample from (pi - qi)+ renormalised
+```
+
+Step 4 is what makes the scheme exact. Under greedy decoding the output is the
+target's argmax at every position by construction. Under sampling, the acceptance
+test combined with the residual resample yields precisely the target distribution —
+speculation changes throughput, never the distribution.
+
+### KV cache bookkeeping
+
+Rejected proposals leave KV entries at positions beyond the committed sequence. Those
+need no explicit rewind: the next round writes over them before any attention step
+reads them, because attention only reads positions up to the current `pos`.
+
+The case that *does* need handling is full acceptance. The draft forwards `current`
+and `x1..x(k-1)`, but never consumes its own last proposal `xk`. When the target
+accepts all `k`, `xk` is committed while the draft's cache has a hole at that
+position, so the draft silently diverges on the following round. `speculative.lua`
+forwards `xk` through the draft after a fully-accepted round to close it.
+
+The symptom is subtle and worth recording: acceptance drops to roughly 60% with the
+*same checkpoint* used as both draft and target, where it must be 100%. Running
+draft == target is therefore the invariant test for this code path.
+
+### Why the win does not show up here
+
+The speedup in a production runtime comes from evaluating a round's `k+1` target
+positions in a single batched matmul — one pass over the target weights amortised
+across several positions. It is a memory-bandwidth win.
+
+Pure Lua has no BLAS, no SIMD, and no batching, and is bound by scalar arithmetic
+rather than weight-loading bandwidth. Each position costs the same whether evaluated
+alone or in a block, so wall-clock time gets *worse* by the cost of the draft passes.
+The meaningful measurement here is **target rounds**: 14 rounds to emit 60 tokens with
+a 15M draft against a 42M target, versus 60 single-token invocations.

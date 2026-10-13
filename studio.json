@@ -35,7 +35,8 @@
       "Transformer Inference",
       "Tokenization",
       "CPU-only",
-      "Binary Checkpoint Loading"
+      "Binary Checkpoint Loading",
+      "Speculative Decoding"
     ],
     "architecture": [
       "CLI entry point parses args and orchestrates model + tokenizer loading",
@@ -43,7 +44,8 @@
       "Tokenizer loaded from binary file with encode/decode support",
       "Forward pass runs full transformer layers with attention and feed-forward blocks",
       "KV-cache maintained across autoregressive decoding steps",
-      "Token sampling with configurable temperature drives generation loop"
+      "Token sampling with configurable temperature drives generation loop",
+      "Speculative decoding layers a draft model over the same forward pass: the draft proposes k tokens, the target verifies them in one round and accepts the longest agreeing prefix"
     ],
     "artifacts": [
       "CLI entry point",
@@ -51,7 +53,8 @@
       "Generation runtime",
       "Tokenizer implementation",
       "Math primitives",
-      "Captured example runs"
+      "Captured example runs",
+      "Speculative decoding"
     ]
   },
   "dossier": {
@@ -98,6 +101,12 @@
         "path": "utils.lua",
         "language": "lua",
         "summary": "matmul, rmsnorm, softmax, argmax and little-endian binary readers - every numeric operation the forward pass uses, in plain Lua."
+      },
+      {
+        "label": "Speculative Decoding",
+        "path": "speculative.lua",
+        "language": "lua",
+        "summary": "Draft/target decode contexts, the accept-reject rule, residual resampling, and the KV-cache fill that keeps the draft in step with the target."
       }
     ],
     "notes": [
@@ -106,7 +115,9 @@
       "All computation is CPU-only and driven entirely from Lua with no C extensions or FFI.",
       "Model and tokenizer are loaded from raw binary files; weights are stored as plain Lua tables of floats.",
       "Correctness is verified by matching llama2.c token for token under greedy decoding on the same checkpoint.",
-      "Throughput is roughly 3-4 tokens/sec on CPU; readability is the design goal, not speed."
+      "Throughput is roughly 3-4 tokens/sec on CPU; readability is the design goal, not speed.",
+      "Speculative decoding emits text identical to running the target model alone; it changes how often the large model is invoked, not what it produces.",
+      "The speedup requires batched matmul over each round's positions, so pure Lua shows fewer target rounds (14 vs 60) without a wall-clock win."
     ]
   },
   "documents": {
@@ -143,6 +154,14 @@
     {
       "label": "Captured example runs",
       "path": "examples/temperature-sweep.txt"
+    },
+    {
+      "label": "Speculative decoding",
+      "path": "speculative.lua"
+    },
+    {
+      "label": "Speculative decoding run",
+      "path": "examples/speculative-42M-target.txt"
     }
   ],
   "links": [
@@ -202,6 +221,27 @@
           "greedy = deterministic",
           "~3-4 tok/s",
           "cpu-only"
+        ]
+      },
+      {
+        "id": "lua-llama-speculative",
+        "label": "Speculative",
+        "type": "terminal",
+        "summary": "A 15M draft proposing for a 42M target: 82% acceptance, 4.29 tokens per target round, output identical to running the target alone.",
+        "source": {
+          "path": "examples/speculative-42M-target.txt",
+          "language": "plaintext"
+        },
+        "controls": [
+          "inspect acceptance rate",
+          "compare against baseline",
+          "open examples",
+          "run locally"
+        ],
+        "metrics": [
+          "82.1% accepted",
+          "14 target rounds / 60 tokens",
+          "exact target distribution"
         ]
       },
       {
